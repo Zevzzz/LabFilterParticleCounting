@@ -1,5 +1,15 @@
+# Written by Donson Xie
+# Implementation by Donson Xie
+# Idea by Andrew Oldag
+
+
 import cv2
 import numpy as np
+import time
+from os import mkdir
+from datetime import datetime
+from math import floor, ceil
+
 
 def maskCircle(img):
     height, width = img.shape[:2]
@@ -20,60 +30,166 @@ def maskCircle(img):
 
     return result
 
+def getCoolVisualImg(componentsImg):
+    # Map component labels to hue value
+    label_hue = np.uint8(179 * componentsImg / np.max(componentsImg))
+    blank_ch = 255 * np.ones_like(label_hue)
+    labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
+
+    # Convert to BGR format for display
+    labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
+
+    # Set background label to black
+    labeled_img[label_hue == 0] = 0
+
+    return labeled_img
+
+def getComponents(img):
+
+    # Mask circle
+    maskedImg = maskCircle(img)
+
+    # Grayscale
+    grayImg = cv2.cvtColor(maskedImg, cv2.COLOR_BGR2GRAY)
+
+    # Binary threshold
+    binaryImg = cv2.adaptiveThreshold(grayImg, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 91, 12)
+
+    # Invert image
+    binaryImg = cv2.bitwise_not(binaryImg)
+
+    # # Optional: Dilate the image to connect disjointed parts of contours
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
+    # dilated = cv2.dilate(binaryImg, kernel, iterations=1)
+
+    # Find connected components
+    numLabels, componentsImg = cv2.connectedComponents(binaryImg)
+
+    # Get ratios
+    ratios = []
+    areas = []
+    for component in range(1, numLabels):
+        compMask = (componentsImg == component).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(compMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        x, y, w, h = cv2.boundingRect(contours[0])
+        ratio = max(w, h) / min(w, h)
+        area = w * h
+
+        imgArea = img.shape[0] * img.shape[1]
+        areaBelowTenthPerc = area < 0.001 * imgArea
+        areaAboveTwoTenThouPerc = area > 0.000002 * imgArea
+        # areaBelowHalfPerc = True
+        ratioBelow5 = ratio < 4
+        # ratioBelow5 = True
+
+        if areaBelowTenthPerc and areaAboveTwoTenThouPerc and ratioBelow5:
+            ratios.append((component, ratio, w, h))
+            areas.append((component, area))
+
+    # resultImg = cv2.drawContours(resultImg, contours, -1, (255, 0, 0), 1)
+    # print(len(contours))
+
+    # for contour in contours:
+    #     imgTemp = resultImg.copy()
+    #     cv2.imshow('Particles', cv2.drawContours(imgTemp, contour, -1, (0, 0, 255), 5))
+
+    # Draw connected components
+
+    return img, len(ratios), ratios, componentsImg
+
+def getDatetime():
+    now = datetime.now()
+    dtString = now.strftime("%m-%d-%Y_%H-%M-%S")
+    return dtString
 
 
 
 
-# Load image
-image = cv2.imread('src/samples/sampleImg.jpg')
-imgH, imgW = image.shape[:2]
-image = cv2.resize(image, (imgW//12, imgH//12))
-
-blackimg = cv2.imread('src/samples/blackimg.jpg')
-
-# Convert to grayscale
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-# Mask circle
-maskedCircle = maskCircle(gray)
-
-# # Blurred image
-# blurredImg = cv2.GaussianBlur(maskedCircle, (5, 5), 0)
-
-# # Detect edges using Canny edge detector
-# edges = cv2.Canny(blurredImg, 10, 200)
-
-# # Threshold to create binary image
-# _, binary = cv2.threshold(blurredImg, 100, 255, cv2.THRESH_BINARY)
-
-# Find contours of particles within the circular region
-contours, _ = cv2.findContours(maskedCircle, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 
-# # Filter contours based on area (particle size)
-# min_area = 0  # adjust as needed
-# filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
-#
-# # Function to check if contour resembles a line (based on aspect ratio)
-# def is_line(cnt):
-#     x, y, w, h = cv2.boundingRect(cnt)
-#     aspect_ratio = w / float(h)
-#     # Adjust aspect ratio threshold based on your filter paper's lines
-#     return 5 < aspect_ratio < 50
-#
-# # Filter out lines
-# particles = [cnt for cnt in filtered_contours if not is_line(cnt)]
-#
-# # Count particles
-# particle_count = len(particles)
-#
-# print(f"Number of particles detected: {particle_count}")
+if __name__ == '__main__':
+    outputSnapshotMargin = 150
 
-# Display the results (optional)
+    # # Show cool visual :)
+    # coolImg = getCoolVisualImg(componentsImg)
+    #
+    # cv2.imshow('Final Result', img)
+    # cv2.imshow('Cool Img', coolImg)
+    # cv2.imshow('Binary Img', binaryImg)
+    # cv2.imshow('Masked Original Img', maskedImg)
 
-cv2.drawContours(maskedCircle, contours, -1, (0, 0, 255), 5)
-# height, width = blackimg.shape[:2]
-# blackimg = cv2.resize(blackimg, (width // 5, height // 5))
-cv2.imshow('Particles', maskedCircle)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+    # Load image
+    imgRaw = cv2.imread('src/samples/sampleImg.jpg')
+    imgH, imgW = imgRaw.shape[:2]
+    imgResized = cv2.resize(imgRaw, (3000, 3000))
+
+    startTime = time.time()
+    print('Extracting Particle Count...')
+
+    componentsRet, particleCount, particleRatios, compImg = getComponents(imgResized)
+
+    copiedRawImg = imgRaw.copy()
+    previewImg = cv2.resize(imgRaw, (1000, 1000))
+
+    particleImgs = []
+    for label, ratio, width, height in particleRatios:
+        x, y, w, h = cv2.boundingRect((compImg == label).astype(np.uint8) * 255)
+
+        previewImg = cv2.rectangle(previewImg, ((x//3 - 10), (y//3 - 10)), ((x + w)//3 + 10, (y + h)//3 + 10), (0, 0, 255), 2)
+        previewImg = cv2.putText(previewImg, str(label), ((x//3), (y//3) - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 225), 2)
+
+        startX = int(floor((x / compImg.shape[1]) * imgRaw.shape[1]))
+        endX = int(ceil(((x + w) / compImg.shape[1]) * imgRaw.shape[1]))
+        startY = int(floor((y / compImg.shape[0]) * imgRaw.shape[0]))
+        endY = int(ceil(((y + h) / compImg.shape[0]) * imgRaw.shape[0]))
+
+        canStartXMargin = startX - outputSnapshotMargin >= 0
+        canEndXMargin = endX + outputSnapshotMargin <= imgRaw.shape[1]
+        canStartYMargin = startY - outputSnapshotMargin >= 0
+        canEndYMargin = endY + outputSnapshotMargin <= imgRaw.shape[0]
+
+        if canStartXMargin and canEndXMargin and canStartYMargin and canEndYMargin:
+            cv2.rectangle(copiedRawImg, (startX - 20, startY - 20), (endX + 20, endY + 20), (0, 0, 255), 3)
+
+            startX -= outputSnapshotMargin
+            endX += outputSnapshotMargin
+            startY -= outputSnapshotMargin
+            endY += outputSnapshotMargin
+
+
+        particleImgs.append(copiedRawImg[startY:endY, startX:endX])
+
+
+
+    # Output folter
+    outputFolder = 'outputs/' + getDatetime()
+    mkdir(outputFolder)
+    mkdir(outputFolder + '/images')
+
+    # Write data
+    outputData = [f'Particle Count: {particleCount}\n\n', 'Particle Label, Width, Height\n']
+    for label, ratio, width, height in particleRatios:
+        outputData.append(f'{label} {width} {height}\n')
+
+    with open(outputFolder + '/Output.txt', 'a') as file:
+        file.writelines(outputData)
+
+    # Write images
+    for i in range(len(particleImgs)):
+        label, _, __, ___ = particleRatios[i]
+        # print(outputFolder + '/images/' + str(label))
+        snapshotImg = particleImgs[i]
+        # cv2.rectangle(snapshotImg, (startX, startY), (endX, endY), (255, 0, 255), 100)
+        cv2.imwrite(outputFolder + '/images/' + str(label) + '.jpg', snapshotImg)
+
+
+    processingTimeSec = round(time.time() - startTime, 3)
+    print(f'Particle Count Extracted, processing time: {processingTimeSec}s')
+    print(f'Particle Count: {particleCount}')
+    print(f'Data saved to {outputFolder}')
+
+    cv2.imshow('Final Result A', previewImg)
+
+    if cv2.waitKey(0) & 0xFF == 27:
+        cv2.destroyAllWindows()
+
