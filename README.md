@@ -6,7 +6,7 @@
 - Andrew Oldag 
 
 ## Significant Features
-- Extracts number of particles from an image of a lab filter
+- Extracts number of particles from an image of a cleanroom lab filter
 - Preview of detected particles will be shown
 - Outputs are saved to an outputs folder as both coordinates and snapshots 
 
