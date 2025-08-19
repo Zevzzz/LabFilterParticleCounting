@@ -1,7 +1,5 @@
-# Written by Donson Xie
-# Implementation by Donson Xie
-# Idea by Andrew Oldag
-
+# Designed and Written by Donson Xie
+# Advised by Andrew Oldag
 
 import cv2
 import numpy as np
