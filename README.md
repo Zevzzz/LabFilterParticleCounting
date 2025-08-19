@@ -3,7 +3,7 @@
 
 ## Team
 - **Donson Xie**
-- Andrew Oldag
+- Andrew Oldag 
 
 ## Significant Features
 - Extracts number of particles from an image of a lab filter
